@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Frame Annotation Tool</title>
+    <!-- Import Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .slider { -webkit-appearance: none; width: 100%; height: 10px; border-radius: 5px; background: #d3d3d3; outline: none; opacity: 0.7; -webkit-transition: .2s; transition: opacity .2s; }
+        .slider:hover { opacity: 1; }
+        .slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #007bff; cursor: pointer; }
+        .slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #007bff; cursor: pointer; }
+        .task-item, .name-item { cursor: pointer; transition: background-color 0.2s; }
+        .task-item:hover, .name-item:hover { background-color: #e9ecef; }
+        .task-item.highlighted { background-color: #d1e7dd; color: #0f5132; }
+        .task-item.annotated { background-color: #d1e7dd; border-color: #badbcc; }
+        .task-item.selected { background-color: #cce7ff; border-color: #99d6ff; }
+        .name-item.selected { background-color: #22c55e; color: white; }
+        #toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 2px; padding: 16px; position: fixed; z-index: 1; left: 50%; transform: translateX(-50%); bottom: 30px; }
+        #toast.show { visibility: visible; -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 max-w-screen-2xl">
+        <!-- Top control bar -->
+        <header class="bg-white p-4 rounded-lg shadow-md mb-4 flex items-center justify-between">
+            <h1 class="text-2xl font-bold text-gray-700">Video Frame Annotation Tool</h1>
+            <div class="flex items-center space-x-4">
+                <label for="video-select" class="font-semibold">Select Video:</label>
+                <select id="video-select" class="p-2 border rounded-md bg-white shadow-sm">
+                    <option>Loading...</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Main content area -->
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <!-- Left task panel -->
+            <aside class="lg:col-span-2 bg-white p-4 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-3 border-b pb-2">Task List <span id="task-progress" class="text-sm font-normal text-gray-600">(0/0)</span></h2>
+                <div id="task-list" class="overflow-y-auto h-[70vh] space-y-1 pr-2">
+                    <!-- Tasks will be dynamically inserted here -->
+                    <p class="text-gray-500">Please select a video first</p>
+                </div>
+            </aside>
+
+            <!-- Center main view -->
+            <div class="lg:col-span-8 bg-white p-4 rounded-lg shadow-md flex flex-col">
+                <!-- Progress bar and control buttons -->
+                <div class="controls mb-4">
+                    <!-- Folder controls -->
+                    <div class="mb-4">
+                        <label for="folder-slider" id="folder-slider-label" class="text-sm block mb-1">Folder (coarse adjustment)</label>
+                        <input type="range" id="folder-slider" class="slider mb-2" min="0" max="0" value="0">
+                        <div class="flex justify-center items-center space-x-2 mb-2">
+                            <button id="btn-folder-prev-10" class="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm">&lt;&lt;</button>
+                            <button id="btn-folder-prev-1" class="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm">&lt;</button>
+                            <span id="current-folder-display" class="font-mono text-sm text-gray-700 px-4 min-w-[200px] text-center">...</span>
+                            <button id="btn-folder-next-1" class="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm">&gt;</button>
+                            <button id="btn-folder-next-10" class="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm">&gt;&gt;</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Frame controls -->
+                    <div class="mb-4">
+                        <label for="frame-slider" id="frame-slider-label" class="text-sm block mb-1">Frame (fine adjustment)</label>
+                        <input type="range" id="frame-slider" class="slider mb-2" min="0" max="999" value="0">
+                        <div class="flex justify-center items-center space-x-2 mb-2">
+                            <button id="btn-frame-prev-10" class="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm">&lt;&lt;</button>
+                            <button id="btn-frame-prev-1" class="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm">&lt;</button>
+                            <span id="frame-info-display" class="font-mono text-sm text-gray-700 px-4 min-w-[300px] text-center">Time: --:--:-- | Absolute Frame: ---</span>
+                            <button id="btn-frame-next-1" class="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm">&gt;</button>
+                            <button id="btn-frame-next-10" class="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm">&gt;&gt;</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Image display -->
+                <div class="flex-grow flex items-center justify-center bg-gray-900 rounded-md overflow-hidden">
+                    <img id="frame-image" src="https://placehold.co/1280x720/000000/FFFFFF?text=Please+Select+a+Video" alt="Video Frame" class="max-w-full max-h-full object-contain">
+                </div>
+            </div>
+
+            <!-- Right name panel -->
+            <aside class="lg:col-span-2 bg-white p-4 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-3 border-b pb-2">Select Name</h2>
+                <div id="name-list" class="overflow-y-auto h-[70vh] space-y-1 pr-2">
+                    <!-- Names will be dynamically inserted here -->
+                    <p class="text-gray-500">Please select a video first</p>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast"></div>
+
+    <!-- JavaScript a-->
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
